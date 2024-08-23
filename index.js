@@ -1,6 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const { ImageAnnotatorClient } = require('@google-cloud/vision');
 const nodemailer = require('nodemailer');
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -8,8 +11,35 @@ const port = process.env.PORT || 3001;
 app.use(express.json());
 app.use(cors());
 
-let verificationCode = '';
-let codeExpires = null;
+// Configuración de Multer para manejar la subida de archivos
+const upload = multer({ dest: 'uploads/' });
+
+// Inicializa el cliente de Vision
+const client = new ImageAnnotatorClient({
+  keyFilename: './krnel2-777-99566df6bf72.json'
+});
+
+app.post('/extract-text', upload.single('imageFile'), async (req, res) => {
+  try {
+      const [result] = await client.textDetection(req.file.path);
+      const detections = result.textAnnotations;
+      res.status(200).send(detections);
+  } catch (error) {
+      console.error('Error processing the image:', error);
+      res.status(500).send('Error processing the image');
+  }
+});
+
+app.post('/check-image', upload.single('imageFile'), async (req, res) => {
+  try {
+      const [result] = await client.safeSearchDetection(req.file.path);
+      const detections = result.safeSearchAnnotation;
+      res.status(200).send(detections);
+  } catch (error) {
+      console.error('Error processing the image:', error);
+      res.status(500).send('Error processing the image');
+  }
+});
 
 async function sendMail(to, subject, text) {
   try {
@@ -39,11 +69,11 @@ async function sendMail(to, subject, text) {
 
 function generateCode() {
   verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-  codeExpires = Date.now() + 10 * 60 * 1000; // 10 minutes from now
+  codeExpires = Date.now() + 10 * 60 * 1000; // 10 minutos a partir de ahora
   console.log('Generated new code:', verificationCode);
   setTimeout(() => {
     generateCode();
-  }, 10 * 60 * 1000); // Regenerate code after 10 minutes
+  }, 10 * 60 * 1000); // Regenera el código cada 10 minutos
 }
 
 app.get('/', (req, res) => {
@@ -73,5 +103,5 @@ app.post('/verify-code', (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  generateCode(); // Generate the initial code when the server starts
+  generateCode(); // Genera el código inicial cuando el servidor inicia
 });
