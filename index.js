@@ -67,6 +67,32 @@ async function sendMail(to, subject, text) {
   }
 }
 
+async function sendMailChange(to, subject,) {
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'krnelpwa@gmail.com',
+        pass: 'jqpe xkkm qiph xygw',
+      },
+    });
+
+    const mailOptions = {
+      from: 'krnelpwa@gmail.com',
+      to,
+      subject,
+      text: 'El correo de tu cuenta ha cambiado, se usará el nuevo correo ',
+    };
+
+    const result = await transporter.sendMail(mailOptions);
+    console.log('Email sent:', result);
+    return result;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw error;
+  }
+}
+
 function generateCode() {
   verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
   codeExpires = Date.now() + 10 * 60 * 1000; // 10 minutos a partir de ahora
@@ -84,6 +110,16 @@ app.post('/send-email', async (req, res) => {
   const { to, subject } = req.body;
   try {
     const result = await sendMail(to, subject, verificationCode);
+    res.status(200).send('Email sent: ' + result.response);
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
+app.post('/send-change-email', async (req, res) => {
+  const { to, subject } = req.body;
+  try {
+    const result = await sendMailChange(to, subject);
     res.status(200).send('Email sent: ' + result.response);
   } catch (error) {
     res.status(500).send(error.toString());
