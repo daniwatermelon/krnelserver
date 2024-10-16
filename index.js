@@ -81,7 +81,7 @@ async function sendMailChange(to, subject,) {
       from: 'krnelpwa@gmail.com',
       to,
       subject,
-      text: 'El correo de tu cuenta ha cambiado, se usará el nuevo correo ',
+      text: 'El correo de tu cuenta ha cambiado, se usará el nuevo correo. ',
     };
 
     const result = await transporter.sendMail(mailOptions);
@@ -140,4 +140,4 @@ app.post('/verify-code', (req, res) => {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
   generateCode(); // Genera el código inicial cuando el servidor inicia
-});
+}); 
