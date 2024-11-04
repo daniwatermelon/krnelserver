@@ -67,6 +67,70 @@ async function sendMail(to, subject, text) {
   }
 }
 
+async function sendMailChangeData(to, subject, text) {
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'krnelpwa@gmail.com',
+        pass: 'jqpe xkkm qiph xygw',
+      },
+    });
+
+     const mailOptions = {
+      from: 'krnelpwa@gmail.com',
+      to,
+      subject,
+      text,  // Usa directamente el texto que llega desde el frontend
+    };
+
+    const result = await transporter.sendMail(mailOptions);
+    console.log('Email sent:', result);
+    return result;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw error;
+  }
+}
+
+/*app.post('/send-email-data', async (req, res) => {              
+  const { to, subject } = req.body;
+  try {
+    const result = await sendMail(to, subject, datachanged);
+    res.status(200).send('Email sent: ' + result.response);
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
+*/ 
+
+async function sendMailRegister(to,) {
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'krnelpwa@gmail.com',
+        pass: 'jqpe xkkm qiph xygw',
+      },
+    });
+
+    const mailOptions = {
+      from: 'krnelpwa@gmail.com',
+      to,
+      subject: 'Se ha registrado una nueva cuenta en nuestra aplicación',
+      text: '¡Bienvenido a la app!  esperamos que tengas una experiencia muy divertida en Krnel, la nueva forma de aprender y divertirse :)',
+    };
+
+    const result = await transporter.sendMail(mailOptions);
+    console.log('Email sent:', result);
+    return result;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw error;
+  }
+}
+
 async function sendMailChange(to, subject,) {
   try {
     const transporter = nodemailer.createTransport({
@@ -106,10 +170,34 @@ app.get('/', (req, res) => {
   res.send('Hello World!');
 });
 
+app.post('/send-change-data', async (req, res) => {
+  const { to, subject, text } = req.body;
+
+  if (!to || !subject || !text) {
+    return res.status(400).send('Información incompleta para enviar el correo.');
+  }
+  try {
+    const result = await sendMailChangeData(to, subject, text);
+    res.status(200).send('Correo enviado: ' + result.response);
+  } catch (error) {
+    res.status(500).send('Error enviando el correo: ' + error.toString());
+  }
+});
+
 app.post('/send-email', async (req, res) => {
   const { to, subject } = req.body;
   try {
     const result = await sendMail(to, subject, verificationCode);
+    res.status(200).send('Email sent: ' + result.response);
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
+app.post('/send-email-register', async (req, res) => {
+  const { to } = req.body;
+  try {
+    const result = await sendMailRegister(to);
     res.status(200).send('Email sent: ' + result.response);
   } catch (error) {
     res.status(500).send(error.toString());
