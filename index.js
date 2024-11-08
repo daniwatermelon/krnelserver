@@ -11,7 +11,6 @@ const port = process.env.PORT || 3001;
 app.use(express.json());
 app.use(cors());
 
-// Configuración de Multer para manejar la subida de archivos
 const upload = multer({ dest: 'uploads/' });
 
 // Inicializa el cliente de Vision
