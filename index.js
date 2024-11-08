@@ -141,3 +141,47 @@ app.listen(port, () => {
   console.log(`Server running on port ${port}`);
   generateCode(); // Genera el código inicial cuando el servidor inicia
 }); 
+
+//seccion de speech to text
+const speech = require('@google-cloud/speech');
+const fs = require('fs');
+
+process.env.GOOGLE_APLICATION_CREDENTIALS = 'krnel2-777-99566df6bf72.json';
+
+async function transcribeAudio(audiofile){
+  try {
+      const speechClient = new speech.SpeechClient();
+
+      const file = fs.readFileSync(audiofile);
+      
+      const audioBytes = file.toString('base64');
+
+      const audio =  {
+        content: audioBytes
+      };
+
+      const config = {
+        encoding: 'LINEAR16', 
+        sampleRateHertz: 44100,
+        languageCode:'en-US'
+      }
+
+      return new Promise((resolve,reject) => {
+        speechClient.recognize({audio,config})
+        .then(data=>{
+          resolve(data);
+        })
+        .catch(error=>{
+          reject(error);
+        })
+    })
+  } catch (error) {
+      console.error('ERROR', error);
+  }
+}
+
+(async ()=>{
+  const data = await transcribeAudio('misericordia.ogg');
+  console.log(data[0].results.map(r=>r.alternatives[0].transcript).join('\n'));
+})()
+// fin de seccion de speesh to text
