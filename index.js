@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const { ImageAnnotatorClient } = require('@google-cloud/vision');
+const {SpeechClient} = require('@google-cloud/speech');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
@@ -16,6 +17,10 @@ const upload = multer({ dest: 'uploads/' });
 // Inicializa el cliente de Vision
 const client = new ImageAnnotatorClient({
   keyFilename: './krnel2-777-99566df6bf72.json'
+});
+
+const clientSp = new SpeechClient({
+  keyFilename: './krnel-77479-175f2bd7418f.json'
 });
 
 app.post('/extract-text', upload.single('imageFile'), async (req, res) => {
@@ -37,6 +42,40 @@ app.post('/check-image', upload.single('imageFile'), async (req, res) => {
   } catch (error) {
       console.error('Error processing the image:', error);
       res.status(500).send('Error processing the image');
+  }
+});
+
+
+app.post('/speech-to-text', upload.single('audioFile'), async (req, res) => {
+  try {
+    const audioFilePath = req.file.path;
+
+    // Lee el archivo de audio
+    const audio = {
+      content: require('fs').readFileSync(audioFilePath).toString('base64'),
+    };
+
+    // Configuración para la conversión
+    const config = {
+      encoding: 'LINEAR16', // Cambia esto según el formato de audio que uses
+      sampleRateHertz: 16000, // Asegúrate de que coincida con tu archivo
+      languageCode: 'es-ES', // Cambia a tu idioma preferido
+    };
+
+    const request = {
+      audio: audio,
+      config: config,
+    };
+
+    // Llama a la API de Speech-to-Text
+    const [response] = await speechClient.recognize(request);
+    const transcription = response.results
+      .map(result => result.alternatives[0].transcript)
+      .join('\n');
+    res.status(200).send({ transcription });
+  } catch (error) {
+    console.error('Error processing the audio:', error);
+    res.status(500).send('Error processing the audio');
   }
 });
 
@@ -91,18 +130,6 @@ async function sendMailChangeData(to, subject, text) {
     throw error;
   }
 }
-
-/*app.post('/send-email-data', async (req, res) => {              
-  const { to, subject } = req.body;
-  try {
-    const result = await sendMail(to, subject, datachanged);
-    res.status(200).send('Email sent: ' + result.response);
-  } catch (error) {
-    res.status(500).send(error.toString());
-  }
-});
-
-*/ 
 
 async function sendMailRegister(to,) {
   try {
