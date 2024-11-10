@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+const fs = require('fs');
 const { ImageAnnotatorClient } = require('@google-cloud/vision');
 const {SpeechClient} = require('@google-cloud/speech');
 const { getDocs, collection, updateDoc, doc, getFirestore } = require('firebase-admin/firestore'); // Ajusta esto según tu configuración de Firebase
@@ -220,6 +221,7 @@ const client = new ImageAnnotatorClient({
   keyFilename: './krnel2-777-99566df6bf72.json'
 });
 
+
 app.post('/extract-text', upload.single('imageFile'), async (req, res) => {
   try {
       const [result] = await client.textDetection(req.file.path);
@@ -419,3 +421,54 @@ app.listen(port, () => {
   console.log(`Server running on port ${port}`);
   generateCode(); // Genera el código inicial cuando el servidor inicia
 }); 
+
+//seccion de speech to text
+// Inicializa el cliente de Speech-to-Text
+ const clientSp = new SpeechClient({
+  keyFilename: './krnel-77479-175f2bd7418f.json'
+});
+
+/*const clientSp = new SpeechClient({
+  keyFilename: process.env.GOOGLE_SPEECH_CREDENTIALS,
+});*/
+
+
+
+app.post('/speech-to-text', upload.single('audioFile'), async (req, res) => {
+  try {
+    const audioFilePath = req.file.path;
+
+    // Lee el archivo de audio y convierte a base64
+    const audio = {
+      content: fs.readFileSync(audioFilePath).toString('base64'),
+    };
+
+    // Configuración para la conversión
+    const config = {
+      encoding: 'WEBM_OPUS', // Cambia esto según el formato de audio que usas
+      languageCode: 'es-ES', // Cambia a tu idioma preferido
+    };
+
+    const request = {
+      audio: audio,
+      config: config,
+    };
+
+    // Llama a la API de Speech-to-Text
+    const [response] = await clientSp.recognize(request);
+    const transcription = response.results
+      .map(result => result.alternatives[0].transcript)
+      .join('\n');
+    console.log('Transcripción obtenida:', transcription);
+    res.status(200).send({ transcription });
+  } catch (error) {
+    console.error('Error processing the audio:', error);
+    res.status(500).send('Error processing the audio');
+  } finally {
+    // Elimina el archivo temporal después de procesar
+    fs.unlink(req.file.path, (err) => {
+      if (err) console.error('Error deleting temporary file:', err);
+    });
+  }
+});
+// fin de seccion de speesh to text
