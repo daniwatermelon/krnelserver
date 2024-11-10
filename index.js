@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+const fs = require('fs');
 const { ImageAnnotatorClient } = require('@google-cloud/vision');
 const {SpeechClient} = require('@google-cloud/speech');
 const nodemailer = require('nodemailer');
@@ -19,9 +20,6 @@ const client = new ImageAnnotatorClient({
   keyFilename: './krnel2-777-99566df6bf72.json'
 });
 
-const clientSp = new SpeechClient({
-  keyFilename: './krnel-77479-175f2bd7418f.json'
-});
 
 app.post('/extract-text', upload.single('imageFile'), async (req, res) => {
   try {
@@ -45,39 +43,6 @@ app.post('/check-image', upload.single('imageFile'), async (req, res) => {
   }
 });
 
-
-app.post('/speech-to-text', upload.single('audioFile'), async (req, res) => {
-  try {
-    const audioFilePath = req.file.path;
-
-    // Lee el archivo de audio
-    const audio = {
-      content: require('fs').readFileSync(audioFilePath).toString('base64'),
-    };
-
-    // Configuración para la conversión
-    const config = {
-      encoding: 'LINEAR16', // Cambia esto según el formato de audio que uses
-      sampleRateHertz: 16000, // Asegúrate de que coincida con tu archivo
-      languageCode: 'es-ES', // Cambia a tu idioma preferido
-    };
-
-    const request = {
-      audio: audio,
-      config: config,
-    };
-
-    // Llama a la API de Speech-to-Text
-    const [response] = await speechClient.recognize(request);
-    const transcription = response.results
-      .map(result => result.alternatives[0].transcript)
-      .join('\n');
-    res.status(200).send({ transcription });
-  } catch (error) {
-    console.error('Error processing the audio:', error);
-    res.status(500).send('Error processing the audio');
-  }
-});
 
 async function sendMail(to, subject, text) {
   try {
@@ -257,45 +222,52 @@ app.listen(port, () => {
 }); 
 
 //seccion de speech to text
-const speech = require('@google-cloud/speech');
-const fs = require('fs');
+// Inicializa el cliente de Speech-to-Text
+ const clientSp = new SpeechClient({
+  keyFilename: './krnel-77479-175f2bd7418f.json'
+});
 
-process.env.GOOGLE_APLICATION_CREDENTIALS = 'krnel2-777-99566df6bf72.json';
+/*const clientSp = new SpeechClient({
+  keyFilename: process.env.GOOGLE_SPEECH_CREDENTIALS,
+});*/
 
-async function transcribeAudio(audiofile){
+
+
+app.post('/speech-to-text', upload.single('audioFile'), async (req, res) => {
   try {
-      const speechClient = new speech.SpeechClient();
+    const audioFilePath = req.file.path;
 
-      const file = fs.readFileSync(audiofile);
-      
-      const audioBytes = file.toString('base64');
+    // Lee el archivo de audio y convierte a base64
+    const audio = {
+      content: fs.readFileSync(audioFilePath).toString('base64'),
+    };
 
-      const audio =  {
-        content: audioBytes
-      };
+    // Configuración para la conversión
+    const config = {
+      encoding: 'WEBM_OPUS', // Cambia esto según el formato de audio que usas
+      languageCode: 'es-ES', // Cambia a tu idioma preferido
+    };
 
-      const config = {
-        encoding: 'LINEAR16', 
-        sampleRateHertz: 44100,
-        languageCode:'en-US'
-      }
+    const request = {
+      audio: audio,
+      config: config,
+    };
 
-      return new Promise((resolve,reject) => {
-        speechClient.recognize({audio,config})
-        .then(data=>{
-          resolve(data);
-        })
-        .catch(error=>{
-          reject(error);
-        })
-    })
+    // Llama a la API de Speech-to-Text
+    const [response] = await clientSp.recognize(request);
+    const transcription = response.results
+      .map(result => result.alternatives[0].transcript)
+      .join('\n');
+    console.log('Transcripción obtenida:', transcription);
+    res.status(200).send({ transcription });
   } catch (error) {
-      console.error('ERROR', error);
+    console.error('Error processing the audio:', error);
+    res.status(500).send('Error processing the audio');
+  } finally {
+    // Elimina el archivo temporal después de procesar
+    fs.unlink(req.file.path, (err) => {
+      if (err) console.error('Error deleting temporary file:', err);
+    });
   }
-}
-
-(async ()=>{
-  const data = await transcribeAudio('misericordia.ogg');
-  console.log(data[0].results.map(r=>r.alternatives[0].transcript).join('\n'));
-})()
+});
 // fin de seccion de speesh to text
