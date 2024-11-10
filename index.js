@@ -3,8 +3,14 @@ const cors = require('cors');
 const multer = require('multer');
 const { ImageAnnotatorClient } = require('@google-cloud/vision');
 const {SpeechClient} = require('@google-cloud/speech');
+const { getDocs, collection, updateDoc, doc, getFirestore } = require('firebase-admin/firestore'); // Ajusta esto según tu configuración de Firebase
 const nodemailer = require('nodemailer');
 require('dotenv').config();
+const admin = require('firebase-admin');
+const serviceAccount = require('./krnel-77479-96824f74ae0e.json');
+const upload = multer({ dest: 'uploads/' });
+
+
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -12,15 +18,134 @@ const port = process.env.PORT || 3001;
 app.use(express.json());
 app.use(cors());
 
-const upload = multer({ dest: 'uploads/' });
-
-// Inicializa el cliente de Vision
-const client = new ImageAnnotatorClient({
-  keyFilename: './krnel2-777-99566df6bf72.json'
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
 });
 
-const clientSp = new SpeechClient({
-  keyFilename: './krnel-77479-175f2bd7418f.json'
+const db = admin.firestore(); 
+const cron = require('node-cron');
+
+const calculateAverageRating = async (exerciseId) => {
+  try {
+    let totalStars = 0;
+    let count = 0;
+
+    // Accede a todos los documentos de usuarios
+    const usersRef = db.collection('usuario');
+    const usersSnapshot = await usersRef.get();
+
+    for (const userDoc of usersSnapshot.docs) {
+      const ratingsRef = userDoc.ref.collection('community'); // Subcolección 'ratings' del usuario
+      const ratingsSnapshot = await ratingsRef.where('IDEjercicio', '==', exerciseId).get();
+
+      // Si no hay valoraciones para este ejercicio en este usuario, sigue con el siguiente
+      if (ratingsSnapshot.empty) continue;
+
+      // Suma las estrellas de todas las valoraciones de este ejercicio
+      ratingsSnapshot.forEach(doc => {
+        const rating = doc.data().starsRated;
+        
+        // Verifica si el rating es un número antes de sumarlo
+        if (typeof rating === 'number' && !isNaN(rating)) {
+          totalStars += rating;
+          count++;
+        } else {
+          console.warn(`Valor inválido para starsRated en el documento: ${doc.id}`);
+        }
+      });
+    }
+
+    if (count === 0) {
+      return 0;
+    }
+
+    return totalStars / count;
+  } catch (error) {
+    console.error("Error al calcular el promedio de las estrellas", error);
+    return 0;
+  }
+};
+
+//El que se ejecuta cada semana para verificar las estrellas de los usuarios
+cron.schedule('* */6 * * *', async () => {
+  console.log('Ejecutando cron job para verificar y actualizar estrellas...');
+
+  try {
+    const communityCollection = db.collection('ejercicioscomunidad');
+    const snapshot = await communityCollection.get();
+
+    if (!snapshot.empty) {
+      const now = new Date();
+
+      for (const docSnap of snapshot.docs) {
+        const exerciseData = docSnap.data();
+
+        if (exerciseData.stars === 0 && exerciseData.dateRate) {
+          const dateRate = new Date(exerciseData.dateRate);
+          const minutesDiff = (now - dateRate) / (1000 * 60); // Diferencia en minutos
+
+          // Si han pasado al menos 5 minutos, actualiza 'stars' a 1
+          if (minutesDiff >= 10080) {
+            // Calcula el promedio de estrellas para este ejercicio
+            const averageRating = await calculateAverageRating(docSnap.id);
+
+            // Actualiza las estrellas con el promedio calculado
+            const docRef = communityCollection.doc(docSnap.id);
+            await docRef.update({ stars: averageRating });
+
+            console.log(`Ejercicio con ID ${docSnap.id} actualizado: stars = ${averageRating}`);
+          }
+        }
+      }
+    } else {
+      console.log('No se encontraron documentos en la colección.');
+    }
+  } catch (error) {
+    console.error('Error al verificar y actualizar los ejercicios:', error);
+  }
+});
+
+//NOTIFICACIONES
+cron.schedule('* * * * *', async () => {
+  console.log('Ejecutando cron job para verificar notificaciones programadas...');
+
+  try {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    const notificationsRef = db.collection('notifications');
+    const snapshot = await notificationsRef.get();
+
+    if (!snapshot.empty) {
+      for (const doc of snapshot.docs) {
+        const notificationData = doc.data();
+
+        const [scheduledHour, scheduledMinute] = notificationData.hour.split(':').map(Number);
+
+        if (scheduledHour === currentHour && scheduledMinute === currentMinute) {
+          await sendMailChangeData(notificationData.email, notificationData.subject, notificationData.text);
+          console.log(`Correo enviado a ${notificationData.email} para la notificación programada.`);
+
+          await notificationsRef.doc(doc.id).delete();
+          console.log(`Documento con ID ${doc.id} eliminado después de enviar la notificación.`);
+        }
+      }
+    } else {
+      console.log('No se encontraron notificaciones programadas en este momento.');
+    }
+  } catch (error) {
+    console.error('Error al verificar y enviar notificaciones programadas:', error);
+  }
+});
+
+
+
+
+
+
+const client = new ImageAnnotatorClient({
+  keyFilename: './krnel2-777-99566df6bf72.json'
 });
 
 app.post('/extract-text', upload.single('imageFile'), async (req, res) => {
@@ -45,39 +170,6 @@ app.post('/check-image', upload.single('imageFile'), async (req, res) => {
   }
 });
 
-
-app.post('/speech-to-text', upload.single('audioFile'), async (req, res) => {
-  try {
-    const audioFilePath = req.file.path;
-
-    // Lee el archivo de audio
-    const audio = {
-      content: require('fs').readFileSync(audioFilePath).toString('base64'),
-    };
-
-    // Configuración para la conversión
-    const config = {
-      encoding: 'LINEAR16', // Cambia esto según el formato de audio que uses
-      sampleRateHertz: 16000, // Asegúrate de que coincida con tu archivo
-      languageCode: 'es-ES', // Cambia a tu idioma preferido
-    };
-
-    const request = {
-      audio: audio,
-      config: config,
-    };
-
-    // Llama a la API de Speech-to-Text
-    const [response] = await speechClient.recognize(request);
-    const transcription = response.results
-      .map(result => result.alternatives[0].transcript)
-      .join('\n');
-    res.status(200).send({ transcription });
-  } catch (error) {
-    console.error('Error processing the audio:', error);
-    res.status(500).send('Error processing the audio');
-  }
-});
 
 async function sendMail(to, subject, text) {
   try {
