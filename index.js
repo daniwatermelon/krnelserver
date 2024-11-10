@@ -65,9 +65,8 @@ const calculateAverageRating = async (exerciseId) => {
     return 0;
   }
 };
-
-//El que se ejecuta cada semana para verificar las estrellas de los usuarios
-cron.schedule('* */6 * * *', async () => {
+//Every day query
+cron.schedule('* */1 * * *', async () => {
   console.log('Ejecutando cron job para verificar y actualizar estrellas...');
 
   try {
@@ -84,7 +83,6 @@ cron.schedule('* */6 * * *', async () => {
           const dateRate = new Date(exerciseData.dateRate);
           const minutesDiff = (now - dateRate) / (1000 * 60); // Diferencia en minutos
 
-          // Si han pasado al menos 5 minutos, actualiza 'stars' a 1
           if (minutesDiff >= 10080) {
             // Calcula el promedio de estrellas para este ejercicio
             const averageRating = await calculateAverageRating(docSnap.id);
@@ -102,6 +100,79 @@ cron.schedule('* */6 * * *', async () => {
     }
   } catch (error) {
     console.error('Error al verificar y actualizar los ejercicios:', error);
+  }
+});
+
+cron.schedule('0 0 * * *', async () => {
+  try {
+    const usersCollection = collection(db, 'usuarios');
+    const usersSnapshot = await getDocs(usersCollection);
+
+    const todayDate = new Date().toISOString().split('T')[0];
+
+    usersSnapshot.forEach(async (userDoc) => {
+      const userId = userDoc.id;
+      const remindDocRef = doc(db, `usuarios/${userId}/config/remindDoc`);
+      const remindDocSnap = await getDoc(remindDocRef);
+
+      if (remindDocSnap.exists()) {
+        // Extraer los arreglos `dates` y `answers` del documento remindDoc
+        let { dates, answers } = remindDocSnap.data();
+
+        if (dates && dates.length > 0 && answers && answers.length === dates.length) {
+          const lastDate = dates[dates.length - 1];
+
+          if (todayDate === lastDate) {
+            // Contar los valores `true` en el array `answers`
+            const trueCount = answers.filter(answer => answer === true).length;
+
+            // Obtener el correo electrónico del usuario desde su documento principal
+            const emailDocRef = doc(db, `usuarios/${userId}`);
+            const emailDocSnap = await getDoc(emailDocRef);
+
+            if (emailDocSnap.exists()) {
+              const { email } = emailDocSnap.data(); // Asegúrate de que el campo `email` esté presente
+
+              // Enviar correo según el conteo de `true` en `answers`
+              if (trueCount > 5) {
+                await sendMailChangeData(email, "¡Lo has hecho muy bien esta semana!", "Felicidades por ser tan consistente en el idioma");
+              } else {
+                await sendMailChangeData(email, "No te rindas, ¡tú puedes!", "Nunca dejes de practicar");
+              }
+
+              console.log(`El usuario ${userId} tiene ${trueCount} respuestas 'true'.`);
+
+              // Calcular las nuevas fechas para la semana siguiente
+              const nextWeekDates = dates.map((_, i) => {
+                const nextDate = new Date(new Date(lastDate).getTime() + (i + 1) * 24 * 60 * 60 * 1000);
+                return nextDate.toISOString().split('T')[0];
+              });
+
+              // Reiniciar el array `answers` con `false`
+              const resetAnswers = Array(answers.length).fill(false);
+
+              // Actualizar Firestore con los nuevos valores de `dates` y `answers`
+              await updateDoc(remindDocRef, {
+                dates: nextWeekDates,
+                answers: resetAnswers
+              });
+
+              console.log(`Fechas y respuestas actualizadas para el usuario ${userId}`);
+            } else {
+              console.log(`El documento principal para el usuario ${userId} no contiene el campo de correo electrónico.`);
+            }
+          } else {
+            console.log(`Hoy no es el último día en el arreglo de fechas para el usuario ${userId}`);
+          }
+        } else {
+          console.log(`El array 'dates' o 'answers' está vacío o mal formateado para el usuario ${userId}`);
+        }
+      } else {
+        console.log(`El documento 'remindDoc' no existe para el usuario ${userId}`);
+      }
+    });
+  } catch (error) {
+    console.error("Error al consultar los documentos de los usuarios:", error);
   }
 });
 
@@ -138,6 +209,8 @@ cron.schedule('* * * * *', async () => {
     console.error('Error al verificar y enviar notificaciones programadas:', error);
   }
 });
+
+
 
 
 
