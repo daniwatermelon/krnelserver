@@ -133,8 +133,7 @@ cron.schedule('0 0 * * *', async () => {
             if (emailDocSnap.exists()) {
               const { email } = emailDocSnap.data(); // Asegúrate de que el campo `email` esté presente
 
-              // Enviar correo según el conteo de `true` en `answers`
-              if (trueCount > 5) {
+              if (trueCount > 4) {
                 await sendMailChangeData(email, "¡Lo has hecho muy bien esta semana!", "Felicidades por ser tan consistente en el idioma");
               } else {
                 await sendMailChangeData(email, "No te rindas, ¡tú puedes!", "Nunca dejes de practicar");
