@@ -106,75 +106,89 @@ cron.schedule('* */1 * * *', async () => {
 
 cron.schedule('0 0 * * *', async () => {
   try {
-    const usersCollection = collection(db, 'usuarios');
+    //Obtenemos todos los docs de la colección de usuario
+    const usersCollection = collection(db, 'usuario');
     const usersSnapshot = await getDocs(usersCollection);
-
+  //Obtenemos la fecha de el día de hoy 
     const todayDate = new Date().toISOString().split('T')[0];
-
+    //Obtenemos la hora de hoy en formato de inglés de estados unidos
+    const currentTime = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }); // Obtiene la hora en formato "HH:mm"
+   //Por todos los documentos que obtenemos
     usersSnapshot.forEach(async (userDoc) => {
       const userId = userDoc.id;
-      const remindDocRef = doc(db, `usuarios/${userId}/config/remindDoc`);
-      const remindDocSnap = await getDoc(remindDocRef);
+      //Obtiene el documento de confguración de cada usuario
+      const configDocRef = doc(db, `usuario/${userId}/config/configDoc`);
+      const configDocSnap = await getDoc(configDocRef);
 
-      if (remindDocSnap.exists()) {
-        // Extraer los arreglos `dates` y `answers` del documento remindDoc
-        let { dates, answers } = remindDocSnap.data();
+      if (configDocSnap.exists()) { //Si existe, obtiene los campos de las notifs y la hora 
+        const { isActivatedNotif, isActivatedReminds, remindTime } = configDocSnap.data();
 
-        if (dates && dates.length > 0 && answers && answers.length === dates.length) {
-          const lastDate = dates[dates.length - 1];
+        // Verificar si las notificaciones y recordatorios están activados y la hora coincide
+        if (isActivatedNotif && isActivatedReminds && remindTime === currentTime) {
+          const remindDocRef = doc(db, `usuario/${userId}/config/remindDoc`);
+          const remindDocSnap = await getDoc(remindDocRef);
+          //So encuentra el doc de recordatorios
+          if (remindDocSnap.exists()) {
+            let { dates, answers } = remindDocSnap.data(); //Obtiene las fechas y las respuestas (son 2 arreglos)
 
-          if (todayDate === lastDate) {
-            // Contar los valores `true` en el array `answers`
-            const trueCount = answers.filter(answer => answer === true).length;
+            if (dates && dates.length > 0 && answers && answers.length === dates.length) { //Si encuentra las fechas y las respuestas
+              const lastDate = dates[dates.length - 1]; //Establece que el último día es el día de al final del arreglo
 
-            // Obtener el correo electrónico del usuario desde su documento principal
-            const emailDocRef = doc(db, `usuarios/${userId}`);
-            const emailDocSnap = await getDoc(emailDocRef);
+              if (todayDate === lastDate) { //Si el día actual es el último día del arreglo
+                //Contar los días en los que se ha contestado
+                const trueCount = answers.filter(answer => answer === true).length; //Cuenta cuantas veces el usuario practicó
 
-            if (emailDocSnap.exists()) {
-              const { email } = emailDocSnap.data(); // Asegúrate de que el campo `email` esté presente
+                const emailDocRef = doc(db, `usuario/${userId}`);
+                const emailDocSnap = await getDoc(emailDocRef);
 
-              if (trueCount > 4) {
-                await sendMailChangeData(email, "¡Lo has hecho muy bien esta semana!", "Felicidades por ser tan consistente en el idioma");
+                if (emailDocSnap.exists()) {
+                  const { email } = emailDocSnap.data();
+
+                  if (trueCount > 5) {
+                    await sendMailChangeData(email, "¡Lo has hecho muy bien esta semana!", "Felicidades por ser tan consistente en el idioma");
+                  } else {
+                    await sendMailChangeData(email, "No te rindas, ¡tú puedes!", "Nunca dejes de practicar");
+                  }
+
+                  console.log(`El usuario ${userId} tiene ${trueCount} respuestas 'true'.`);
+
+                  const nextWeekDates = dates.map((_, i) => {
+                    const nextDate = new Date(new Date(lastDate).getTime() + (i + 1) * 24 * 60 * 60 * 1000);
+                    return nextDate.toISOString().split('T')[0];
+                  });
+
+                  const resetAnswers = Array(answers.length).fill(false);
+
+                  await updateDoc(remindDocRef, {
+                    dates: nextWeekDates,
+                    answers: resetAnswers
+                  });
+
+                  console.log(`Fechas y respuestas actualizadas para el usuario ${userId}`);
+                } else {
+                  console.log(`El documento principal para el usuario ${userId} no contiene el campo de correo electrónico.`);
+                }
               } else {
-                await sendMailChangeData(email, "No te rindas, ¡tú puedes!", "Nunca dejes de practicar");
+                console.log(`Hoy no es el último día en el arreglo de fechas para el usuario ${userId}`);
               }
-
-              console.log(`El usuario ${userId} tiene ${trueCount} respuestas 'true'.`);
-
-              // Calcular las nuevas fechas para la semana siguiente
-              const nextWeekDates = dates.map((_, i) => {
-                const nextDate = new Date(new Date(lastDate).getTime() + (i + 1) * 24 * 60 * 60 * 1000);
-                return nextDate.toISOString().split('T')[0];
-              });
-
-              // Reiniciar el array `answers` con `false`
-              const resetAnswers = Array(answers.length).fill(false);
-
-              // Actualizar Firestore con los nuevos valores de `dates` y `answers`
-              await updateDoc(remindDocRef, {
-                dates: nextWeekDates,
-                answers: resetAnswers
-              });
-
-              console.log(`Fechas y respuestas actualizadas para el usuario ${userId}`);
             } else {
-              console.log(`El documento principal para el usuario ${userId} no contiene el campo de correo electrónico.`);
+              console.log(`El array 'dates' o 'answers' está vacío o mal formateado para el usuario ${userId}`);
             }
           } else {
-            console.log(`Hoy no es el último día en el arreglo de fechas para el usuario ${userId}`);
+            console.log(`El documento 'remindDoc' no existe para el usuario ${userId}`);
           }
         } else {
-          console.log(`El array 'dates' o 'answers' está vacío o mal formateado para el usuario ${userId}`);
+          console.log(`Las notificaciones o recordatorios no están activados, o la hora no coincide para el usuario ${userId}`);
         }
       } else {
-        console.log(`El documento 'remindDoc' no existe para el usuario ${userId}`);
+        console.log(`El documento 'configDoc' no existe para el usuario ${userId}`);
       }
     });
   } catch (error) {
     console.error("Error al consultar los documentos de los usuarios:", error);
   }
 });
+
 
 //NOTIFICACIONES
 cron.schedule('* * * * *', async () => {
