@@ -232,12 +232,15 @@ cron.schedule('* * * * *', async () => {
 
 
 const client = new ImageAnnotatorClient({
-  keyFilename: './krnel2-777-99566df6bf72.json'
+  keyFilename: './imagestuff-442905-d954582ee473.json'
 });
 
 
+
 app.post('/extract-text', upload.single('imageFile'), async (req, res) => {
+
   try {
+
       const [result] = await client.textDetection(req.file.path);
       const detections = result.textAnnotations;
       res.status(200).send(detections);
@@ -248,8 +251,12 @@ app.post('/extract-text', upload.single('imageFile'), async (req, res) => {
 });
 
 app.post('/check-image', upload.single('imageFile'), async (req, res) => {
+  console.log('Vision Client Config:', client);
+console.log('Project ID:', client.projectId); // Esto debería devolver el ID del proyecto
   try {
+
       const [result] = await client.safeSearchDetection(req.file.path);
+      
       const detections = result.safeSearchAnnotation;
       res.status(200).send(detections);
   } catch (error) {
