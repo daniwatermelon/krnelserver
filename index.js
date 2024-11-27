@@ -104,11 +104,12 @@ cron.schedule('* */1 * * *', async () => {
   }
 });
 
-cron.schedule('0 0 * * *', async () => {
+cron.schedule('* * * * *', async () => {
+  console.log("MOTIVANDO A LOS USUARIOS");
   try {
     //Obtenemos todos los docs de la colección de usuario
-    const usersCollection = collection(db, 'usuario');
-    const usersSnapshot = await getDocs(usersCollection);
+    const usersCollection = db.collection('usuario');
+    const usersSnapshot = await usersCollection.get();
   //Obtenemos la fecha de el día de hoy 
     const todayDate = new Date().toISOString().split('T')[0];
     //Obtenemos la hora de hoy en formato de inglés de estados unidos
@@ -117,18 +118,18 @@ cron.schedule('0 0 * * *', async () => {
     usersSnapshot.forEach(async (userDoc) => {
       const userId = userDoc.id;
       //Obtiene el documento de confguración de cada usuario
-      const configDocRef = doc(db, `usuario/${userId}/config/configDoc`);
-      const configDocSnap = await getDoc(configDocRef);
+      const configDocRef = db.doc(`usuario/${userId}/config/configDoc`);
+      const configDocSnap = await configDocRef.get();
 
-      if (configDocSnap.exists()) { //Si existe, obtiene los campos de las notifs y la hora 
+      if (configDocSnap.exists) { //Si existe, obtiene los campos de las notifs y la hora 
         const { isActivatedNotif, isActivatedReminds, remindTime } = configDocSnap.data();
 
         // Verificar si las notificaciones y recordatorios están activados y la hora coincide
         if (isActivatedNotif && isActivatedReminds && remindTime === currentTime) {
-          const remindDocRef = doc(db, `usuario/${userId}/config/remindDoc`);
-          const remindDocSnap = await getDoc(remindDocRef);
+          const remindDocRef = db.doc(`usuario/${userId}/config/remindDoc`);
+          const remindDocSnap = await remindDocRef.get();
           //So encuentra el doc de recordatorios
-          if (remindDocSnap.exists()) {
+          if (remindDocSnap.exists) {
             let { dates, answers } = remindDocSnap.data(); //Obtiene las fechas y las respuestas (son 2 arreglos)
 
             if (dates && dates.length > 0 && answers && answers.length === dates.length) { //Si encuentra las fechas y las respuestas
@@ -138,13 +139,13 @@ cron.schedule('0 0 * * *', async () => {
                 //Contar los días en los que se ha contestado
                 const trueCount = answers.filter(answer => answer === true).length; //Cuenta cuantas veces el usuario practicó
 
-                const emailDocRef = doc(db, `usuario/${userId}`);
-                const emailDocSnap = await getDoc(emailDocRef);
+                const emailDocRef = db.doc(`usuario/${userId}`);
+                const emailDocSnap = await emailDocRef.get();
 
-                if (emailDocSnap.exists()) {
+                if (emailDocSnap.exists) {
                   const { email } = emailDocSnap.data();
 
-                  if (trueCount > 5) {
+                  if (trueCount > 4) {
                     await sendMailChangeData(email, "¡Lo has hecho muy bien esta semana!", "Felicidades por ser tan consistente en el idioma");
                   } else {
                     await sendMailChangeData(email, "No te rindas, ¡tú puedes!", "Nunca dejes de practicar");
@@ -159,11 +160,10 @@ cron.schedule('0 0 * * *', async () => {
 
                   const resetAnswers = Array(answers.length).fill(false);
 
-                  await updateDoc(remindDocRef, {
+                  await remindDocRef.update({
                     dates: nextWeekDates,
                     answers: resetAnswers
-                  });
-
+                });
                   console.log(`Fechas y respuestas actualizadas para el usuario ${userId}`);
                 } else {
                   console.log(`El documento principal para el usuario ${userId} no contiene el campo de correo electrónico.`);
