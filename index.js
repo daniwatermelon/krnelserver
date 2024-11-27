@@ -446,7 +446,7 @@ app.listen(port, () => {
 //seccion de speech to text
 // Inicializa el cliente de Speech-to-Text
  const clientSp = new SpeechClient({
-  keyFilename: './krnel-77479-175f2bd7418f.json'
+  keyFilename: './imagestuff-442905-f54f23108ff0.json'
 });
 
 /*const clientSp = new SpeechClient({
