@@ -60,7 +60,7 @@ const calculateAverageRating = async (exerciseId) => {
       return 0;
     }
 
-    return totalStars / count;
+    return Math.round(totalStars / count);
   } catch (error) {
     console.error("Error al calcular el promedio de las estrellas", error);
     return 0;
@@ -124,11 +124,9 @@ cron.schedule('* * * * *', async () => {
       if (configDocSnap.exists) { //Si existe, obtiene los campos de las notifs y la hora 
         const { isActivatedNotif, isActivatedReminds, remindTime } = configDocSnap.data();
 
-        // Verificar si las notificaciones y recordatorios están activados y la hora coincide
-        if (isActivatedNotif && isActivatedReminds && remindTime === currentTime) {
+        if ( remindTime === currentTime) {
           const remindDocRef = db.doc(`usuario/${userId}/config/remindDoc`);
           const remindDocSnap = await remindDocRef.get();
-          //So encuentra el doc de recordatorios
           if (remindDocSnap.exists) {
             let { dates, answers } = remindDocSnap.data(); //Obtiene las fechas y las respuestas (son 2 arreglos)
 
@@ -141,15 +139,14 @@ cron.schedule('* * * * *', async () => {
 
                 const emailDocRef = db.doc(`usuario/${userId}`);
                 const emailDocSnap = await emailDocRef.get();
-
-                if (emailDocSnap.exists) {
                   const { email } = emailDocSnap.data();
-
-                  if (trueCount > 4) {
+                do{
+                  if (trueCount > 4 ) {
                     await sendMailChangeData(email, "¡Lo has hecho muy bien esta semana!", "Felicidades por ser tan consistente en el idioma");
                   } else {
                     await sendMailChangeData(email, "No te rindas, ¡tú puedes!", "Nunca dejes de practicar");
                   }
+                }while(isActivatedNotif && isActivatedReminds && remindTime === currentTime)
 
                   console.log(`El usuario ${userId} tiene ${trueCount} respuestas 'true'.`);
 
@@ -158,7 +155,7 @@ cron.schedule('* * * * *', async () => {
                     return nextDate.toISOString().split('T')[0];
                   });
 
-                  const resetAnswers = Array(answers.length).fill(false);
+                  const resetAnswers = Array(answers.length).fill(false); 
 
                   await remindDocRef.update({
                     dates: nextWeekDates,
@@ -171,12 +168,11 @@ cron.schedule('* * * * *', async () => {
               } else {
                 console.log(`Hoy no es el último día en el arreglo de fechas para el usuario ${userId}`);
               }
-            } else {
-              console.log(`El array 'dates' o 'answers' está vacío o mal formateado para el usuario ${userId}`);
-            }
-          } else {
-            console.log(`El documento 'remindDoc' no existe para el usuario ${userId}`);
-          }
+            }else{
+                console.log(`No existe esa madre`);
+
+              }
+            
         } else {
           console.log(`Las notificaciones o recordatorios no están activados, o la hora no coincide para el usuario ${userId}`);
         }
@@ -184,6 +180,8 @@ cron.schedule('* * * * *', async () => {
         console.log(`El documento 'configDoc' no existe para el usuario ${userId}`);
       }
     });
+
+    
   } catch (error) {
     console.error("Error al consultar los documentos de los usuarios:", error);
   }
